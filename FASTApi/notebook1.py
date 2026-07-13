@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+import time
+from fastapi import FastAPI , HTTPException, status, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from abc import ABC, abstractmethod
+
 
 app = FastAPI()
 
@@ -119,6 +122,54 @@ class BookingRequest(BaseModel):
 class CancelRequest(BaseModel):
     booking_id: int
 
+
+
+
+
+# ── Middleware  ─────────────────────────
+@app.middleware("http")
+async def log_request(request : Request, call_next):
+    start = time.time()
+    print(f"-> request.method: {request.method} path: {request.url.path}")
+    response = await call_next(request)
+    end = time.time()
+    print(f"<- response.time: {end - start}")
+    return response
+
+
+API_KEY = "rental-secret-key-2026"
+
+@app.middleware("http")
+async def authenticate(request : Request, call_next):
+
+    if request.url.path in ["/", "/docs", "/openapi.json", "/status"]:
+        return  await call_next(request)
+    
+    api_key = request.headers.get("X-API-KEY")
+    if api_key != API_KEY:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code = 401,
+            content =  {"error": "unauthorized"}
+        )
+    
+    return await call_next(request)
+
+
+
+
+
+
+# cors :  allow browser to call API 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+
+
 # ── ENDPOINTS ─────────────────────────────────
 @app.get("/")
 def home():
@@ -154,14 +205,20 @@ def vehicle_count():
 def get_vehicle_info(vehicle_type: str):
     vehicle = VehicleFactory.create(vehicle_type)
     if not vehicle:
-        return {"error": f"vehicle '{vehicle_type}' not found"}
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"vehicle '{vehicle_type}' not found"
+        )
     return {"type": vehicle_type, "info": vehicle.get_info()}
 
 @app.post("/book")
 def book_vehicle(booking: BookingRequest):
     vehicle = VehicleFactory.create(booking.vehicle_type)
     if not vehicle:
-        return {"error": f"vehicle '{booking.vehicle_type}' not found"}
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"vehicle '{booking.vehicle_type}' not found"
+        )
     new_booking = db.save_booking(booking.user, booking.vehicle_type)
     return {
         "message": "booking confirmed",
@@ -173,19 +230,28 @@ def book_vehicle(booking: BookingRequest):
 def get_bookings():
     all_bookings = db.get_all_bookings()
     if not all_bookings:
-        return {"message": "no bookings yet"}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="no bookings yet"
+        )
     return {"total": len(all_bookings), "bookings": all_bookings}
 
 @app.get("/bookings/{user}")
 def get_user_bookings(user: str):
     user_bookings = db.get_user_bookings(user)
     if not user_bookings:
-        return {"message": f"no bookings found for {user}"}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no bookings found for {user}"
+        )   
     return {"user": user, "bookings": user_bookings}
 
 @app.post("/cancel")
 def cancel_booking(request: CancelRequest):
     success = db.cancel_booking(request.booking_id)
     if success:
-        return {"message": f"booking {request.booking_id} cancelled"}
-    return {"error": f"booking {request.booking_id} not found"}
+        return  {"message": f"booking {request.booking_id} cancelled successfully"}
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"booking {request.booking_id} not found"
+    )

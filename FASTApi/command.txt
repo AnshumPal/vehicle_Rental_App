@@ -1,1 +1,1 @@
-py -m uvicorn main:app --reload
+py -m uvicorn notebook1:app --reload
