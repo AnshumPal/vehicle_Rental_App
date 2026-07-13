@@ -1,0 +1,7 @@
+I built a production AI backend system from scratch.
+ It handles bookings via REST API,
+ stores data in PostgreSQL,
+ processes events through Kafka,
+ uses AI agents for intelligent booking,
+ answers questions via RAG,
+ deployed on cloud with full monitoring.
