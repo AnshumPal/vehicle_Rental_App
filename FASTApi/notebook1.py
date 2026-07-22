@@ -1,11 +1,21 @@
 import time
-from fastapi import FastAPI , HTTPException, status, Request
+from fastapi import FastAPI, HTTPException, status, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from abc import ABC, abstractmethod
+from sqlalchemy.orm import Session
+from database import get_db, engine
+from models import Booking, Base
 
+# create tables if not exists
+Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = FastAPI(
+    title="Vehicle Rental API",
+    description="A production grade rental API",
+    version="1.0.0"
+)
 
 # ── OBSERVER PATTERN ──────────────────────────
 class Observer(ABC):
@@ -29,39 +39,15 @@ class RentalDatabase:
         if cls._instance is None:
             print("opening database connection...")
             cls._instance = super().__new__(cls)
-            cls._instance.bookings = []
-            cls._instance.total_bookings = 0
             cls._instance._observers = []
         return cls._instance
 
     def subscribe(self, observer: Observer) -> None:
         self._observers.append(observer)
 
-    def save_booking(self, user: str, vehicle: str) -> dict:
-        self.total_bookings += 1
-        booking = {
-            "id": self.total_bookings,
-            "user": user,
-            "vehicle": vehicle,
-            "status": "confirmed"
-        }
-        self.bookings.append(booking)
+    def notify_all(self, user: str, vehicle: str) -> None:
         for observer in self._observers:
             observer.notify(user, vehicle)
-        return booking
-
-    def get_all_bookings(self) -> list:
-        return self.bookings
-
-    def get_user_bookings(self, user: str) -> list:
-        return [b for b in self.bookings if b["user"] == user]
-
-    def cancel_booking(self, booking_id: int) -> bool:
-        for booking in self.bookings:
-            if booking["id"] == booking_id:
-                self.bookings.remove(booking)
-                return True
-        return False
 
 # ── FACTORY PATTERN ───────────────────────────
 class Vehical(ABC):
@@ -110,9 +96,9 @@ class VehicleFactory:
         return list(VehicleFactory._vehicles.keys())
 
 # ── SETUP ─────────────────────────────────────
-db = RentalDatabase()
-db.subscribe(SMSNotification())
-db.subscribe(EmailNotification())
+db_singleton = RentalDatabase()
+db_singleton.subscribe(SMSNotification())
+db_singleton.subscribe(EmailNotification())
 
 # ── MODELS ────────────────────────────────────
 class BookingRequest(BaseModel):
@@ -122,45 +108,29 @@ class BookingRequest(BaseModel):
 class CancelRequest(BaseModel):
     booking_id: int
 
-
-
-
-
-# ── Middleware  ─────────────────────────
+# ── MIDDLEWARE ────────────────────────────────
 @app.middleware("http")
-async def log_request(request : Request, call_next):
+async def log_request(request: Request, call_next):
     start = time.time()
-    print(f"-> request.method: {request.method} path: {request.url.path}")
+    print(f"-> {request.method} {request.url.path}")
     response = await call_next(request)
-    end = time.time()
-    print(f"<- response.time: {end - start}")
+    print(f"<- {response.status_code} {time.time() - start:.3f}s")
     return response
-
 
 API_KEY = "rental-secret-key-2026"
 
 @app.middleware("http")
-async def authenticate(request : Request, call_next):
-
+async def authenticate(request: Request, call_next):
     if request.url.path in ["/", "/docs", "/openapi.json", "/status"]:
-        return  await call_next(request)
-    
+        return await call_next(request)
     api_key = request.headers.get("X-API-KEY")
     if api_key != API_KEY:
-        from fastapi.responses import JSONResponse
         return JSONResponse(
-            status_code = 401,
-            content =  {"error": "unauthorized"}
+            status_code=401,
+            content={"error": "unauthorized"}
         )
-    
     return await call_next(request)
 
-
-
-
-
-
-# cors :  allow browser to call API 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -168,19 +138,18 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-
-
 # ── ENDPOINTS ─────────────────────────────────
 @app.get("/")
 def home():
     return {"message": "Welcome to Vehicle Rental API"}
 
 @app.get("/status")
-def status():
+def get_status(db: Session = Depends(get_db)):
+    total = db.query(Booking).count()
     return {
         "status": "running",
-        "total_bookings": db.total_bookings,
-        "database": "rental.database.com"
+        "total_bookings": total,
+        "database": "postgresql://localhost/rental_db"
     }
 
 @app.get("/vehicles")
@@ -211,47 +180,85 @@ def get_vehicle_info(vehicle_type: str):
         )
     return {"type": vehicle_type, "info": vehicle.get_info()}
 
-@app.post("/book")
-def book_vehicle(booking: BookingRequest):
+@app.post("/book", status_code=status.HTTP_201_CREATED)
+def book_vehicle(booking: BookingRequest, db: Session = Depends(get_db)):
     vehicle = VehicleFactory.create(booking.vehicle_type)
     if not vehicle:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"vehicle '{booking.vehicle_type}' not found"
         )
-    new_booking = db.save_booking(booking.user, booking.vehicle_type)
+    new_booking = Booking(
+        user=booking.user,
+        vehicle=booking.vehicle_type,
+        status="confirmed"
+    )
+    db.add(new_booking)
+    db.commit()
+    db.refresh(new_booking)
+    db_singleton.notify_all(booking.user, booking.vehicle_type)
     return {
         "message": "booking confirmed",
-        "booking": new_booking,
+        "booking": {
+            "id": new_booking.id,
+            "user": new_booking.user,
+            "vehicle": new_booking.vehicle,
+            "status": new_booking.status
+        },
         "vehicle_info": vehicle.get_info()
     }
 
 @app.get("/bookings")
-def get_bookings():
-    all_bookings = db.get_all_bookings()
+def get_bookings(db: Session = Depends(get_db)):
+    all_bookings = db.query(Booking).all()
     if not all_bookings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="no bookings yet"
         )
-    return {"total": len(all_bookings), "bookings": all_bookings}
+    return {
+        "total": len(all_bookings),
+        "bookings": [
+            {
+                "id": b.id,
+                "user": b.user,
+                "vehicle": b.vehicle,
+                "status": b.status
+            } for b in all_bookings
+        ]
+    }
 
 @app.get("/bookings/{user}")
-def get_user_bookings(user: str):
-    user_bookings = db.get_user_bookings(user)
+def get_user_bookings(user: str, db: Session = Depends(get_db)):
+    user_bookings = db.query(Booking).filter(Booking.user == user).all()
     if not user_bookings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"no bookings found for {user}"
-        )   
-    return {"user": user, "bookings": user_bookings}
+        )
+    return {
+        "user": user,
+        "bookings": [
+            {
+                "id": b.id,
+                "user": b.user,
+                "vehicle": b.vehicle,
+                "status": b.status
+            } for b in user_bookings
+        ]
+    }
 
 @app.post("/cancel")
-def cancel_booking(request: CancelRequest):
-    success = db.cancel_booking(request.booking_id)
-    if success:
-        return  {"message": f"booking {request.booking_id} cancelled successfully"}
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"booking {request.booking_id} not found"
-    )
+def cancel_booking(request: CancelRequest, db: Session = Depends(get_db)):
+    booking = db.query(Booking).filter(
+        Booking.id == request.booking_id
+    ).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"booking {request.booking_id} not found"
+        )
+    db.delete(booking)
+    db.commit()
+    return {"message": f"booking {request.booking_id} cancelled successfully"}
+
