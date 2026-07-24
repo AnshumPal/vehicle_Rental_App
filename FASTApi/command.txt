@@ -1,8 +1,30 @@
-py -m uvicorn notebook1:app --reload
+
 
 
 IN anaconda prompt : 
 uvicorn notebook1:app --reload
+
+
+file path
+cd "C:\Users\ASUS\OneDrive\Desktop\Backend-practice\FASTApi"
+
+test 1 : home endpoint
+curl http://127.0.0.1:8000/
+
+test 2 : get all vehicles
+curl -H "X-API-Key: rental-secret-key-2026" http://127.0.0.1:8000/vehicles
+
+test 3 : book a vehicles
+curl -X POST http://127.0.0.1:8000/book -H "X-API-Key: rental-secret-key-2026" -H "Content-Type: application/json" -d "{\"user\": \"Anshum\", \"vehicle_type\": \"car\"}"
+
+test 4 : get all bookings
+curl -H "X-API-Key: rental-secret-key-2026" http://127.0.0.1:8000/bookings
+
+
+
+
+
+
 
 request to vehicles
 curl -H "X-API-Key: rental-secret-key-2026" http://127.0.0.1:8000/vehicles
