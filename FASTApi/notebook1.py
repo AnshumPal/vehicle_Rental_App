@@ -10,6 +10,7 @@ from database import get_db, engine
 from models import Booking, Base
 from groq import Groq
 from dotenv import load_dotenv
+from RAG import rag_chain
 
 load_dotenv()
 
@@ -110,6 +111,10 @@ class VehicleFactory:
 class RecommendationRequest(BaseModel):
     requirement: str
 
+
+# ── Connecting RAG To API  ─────────────────────────────────────
+class AskRequest(BaseModel):
+    question: str
 
 
 # ── SETUP ─────────────────────────────────────
@@ -316,4 +321,12 @@ def recommend_vehicle(request: RecommendationRequest):
         "recommended_vehicle": vehicle_type,
         "vehicle_info": vehicle.get_info(),
         "reason": reason
+    }
+
+@app.post("/ask")
+def ask_question(request: AskRequest):
+    answer = rag_chain.invoke(request.question)
+    return {
+        "question": request.question,
+        "answer": answer
     }

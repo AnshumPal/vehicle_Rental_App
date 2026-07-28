@@ -25,7 +25,8 @@ curl -X POST http://127.0.0.1:8000/recommend -H "X-API-Key: rental-secret-key-20
 curl -X POST http://127.0.0.1:8000/recommend -H "X-API-Key: rental-secret-key-2026" -H "Content-Type: application/json" -d "{\"requirement\": \"I want to travel a short distance alone \"}"
 
 
-
+test 6: RAG testing
+curl -X POST http://127.0.0.1:8000/ask -H "X-API-Key: rental-secret-key-2026" -H "Content-Type: application/json" -d "{\"question\": \"Which vehicle is cheapest?\"}"
 
 
 
