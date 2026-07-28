@@ -1,3 +1,4 @@
+import os
 import time
 from fastapi import FastAPI, HTTPException, status, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,15 @@ from abc import ABC, abstractmethod
 from sqlalchemy.orm import Session
 from database import get_db, engine
 from models import Booking, Base
+from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
+
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+
+
 
 # create tables if not exists
 Base.metadata.create_all(bind=engine)
@@ -94,6 +104,13 @@ class VehicleFactory:
     @staticmethod
     def available_types() -> list:
         return list(VehicleFactory._vehicles.keys())
+
+
+# ── BASE Model  ─────────────────────────────────────
+class RecommendationRequest(BaseModel):
+    requirement: str
+
+
 
 # ── SETUP ─────────────────────────────────────
 db_singleton = RentalDatabase()
@@ -262,3 +279,41 @@ def cancel_booking(request: CancelRequest, db: Session = Depends(get_db)):
     db.commit()
     return {"message": f"booking {request.booking_id} cancelled successfully"}
 
+
+@app.post("/recommend")
+def recommend_vehicle(request: RecommendationRequest):
+    # ask AI which vehicle fits the requirement
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": """You are a vehicle rental assistant.
+                We have these vehicles: car, bike, truck, electriccar, scooter.
+                Based on user requirement recommend ONLY ONE vehicle.
+                Reply with JSON only in this format:
+                {"vehicle": "truck", "reason": "brief reason here"}
+                No other text."""
+            },
+            {
+                "role": "user",
+                "content": request.requirement
+            }
+        ]
+    )
+
+    import json
+    result = json.loads(response.choices[0].message.content)
+    vehicle_type = result["vehicle"]
+    reason = result["reason"]
+
+    vehicle = VehicleFactory.create(vehicle_type)
+    if not vehicle:
+        raise HTTPException(status_code=400, detail="AI recommended unknown vehicle")
+
+    return {
+        "requirement": request.requirement,
+        "recommended_vehicle": vehicle_type,
+        "vehicle_info": vehicle.get_info(),
+        "reason": reason
+    }

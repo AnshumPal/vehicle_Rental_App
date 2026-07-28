@@ -20,6 +20,9 @@ curl -X POST http://127.0.0.1:8000/book -H "X-API-Key: rental-secret-key-2026" -
 test 4 : get all bookings
 curl -H "X-API-Key: rental-secret-key-2026" http://127.0.0.1:8000/bookings
 
+test 5 : reccomendation API  working  
+curl -X POST http://127.0.0.1:8000/recommend -H "X-API-Key: rental-secret-key-2026" -H "Content-Type: application/json" -d "{\"requirement\": \"I need to move furniture this weekend\"}"
+curl -X POST http://127.0.0.1:8000/recommend -H "X-API-Key: rental-secret-key-2026" -H "Content-Type: application/json" -d "{\"requirement\": \"I want to travel a short distance alone \"}"
 
 
 
