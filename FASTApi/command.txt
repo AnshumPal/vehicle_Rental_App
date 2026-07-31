@@ -32,3 +32,9 @@ curl -X POST http://127.0.0.1:8000/ask -H "X-API-Key: rental-secret-key-2026" -H
 
 request to vehicles
 curl -H "X-API-Key: rental-secret-key-2026" http://127.0.0.1:8000/vehicles
+
+test Agent command 
+
+C:\Users\ASUS\OneDrive\Desktop\Backend-practice\FASTApi>curl -X POST http://127.0.0.1:8000/agent -H "X-API-Key: rental-secret-key-2026" -H "Content-Type: application/json" -d "{\"message\": \"Book the cheapest vehicle for Anshum for 3 days\"}"
+Internal Server Error
+C:\Users\ASUS\OneDrive\Desktop\Backend-practice\FASTApi>

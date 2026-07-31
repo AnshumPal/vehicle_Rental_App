@@ -1,5 +1,6 @@
 import os
 import time
+from urllib import response
 from fastapi import FastAPI, HTTPException, status, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,6 +12,8 @@ from models import Booking, Base
 from groq import Groq
 from dotenv import load_dotenv
 from RAG import rag_chain
+from agent import run_agent
+
 
 load_dotenv()
 
@@ -115,6 +118,12 @@ class RecommendationRequest(BaseModel):
 # ── Connecting RAG To API  ─────────────────────────────────────
 class AskRequest(BaseModel):
     question: str
+
+
+
+# ── Connecting RAG To API  ─────────────────────────────────────
+class AgentRequest(BaseModel):
+    message : str
 
 
 # ── SETUP ─────────────────────────────────────
@@ -330,3 +339,21 @@ def ask_question(request: AskRequest):
         "question": request.question,
         "answer": answer
     }
+
+
+@app.post("/agent")
+def agent_endpoint(request: AgentRequest):
+    for attempt in range(3):        # try 3 times
+        try:
+            response = run_agent(request.message)
+            return {
+                "message": request.message,
+                "response": str(response)
+            }
+        except Exception as e:
+            if attempt == 2:        # last attempt failed
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Agent failed after 3 attempts: {str(e)}"
+                )
+            continue                # try again
