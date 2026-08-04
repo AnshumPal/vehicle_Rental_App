@@ -1,7 +1,213 @@
-I built a production AI backend system from scratch.
- It handles bookings via REST API,
- stores data in PostgreSQL,
- processes events through Kafka,
- uses AI agents for intelligent booking,
- answers questions via RAG,
- deployed on cloud with full monitoring.
+# RentIQ — AI-Powered Vehicle Rental Backend
+
+Production grade vehicle rental system with intelligent booking, RAG-based Q&A, and autonomous AI agent built with FastAPI, PostgreSQL, LangChain, and LangGraph.
+
+---
+
+## What it does
+
+Most rental apps make you pick a vehicle from a list manually. RentIQ lets you interact in three smarter ways:
+
+- **Manual booking** — standard REST API endpoints for direct bookings
+- **AI recommendation** — describe your need, AI picks the right vehicle
+- **RAG Q&A** — ask any question about vehicles in plain English, get accurate answers from your own data
+- **AI Agent** — say "book cheapest vehicle for 3 days" and the agent handles everything autonomously
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| API Framework | FastAPI |
+| Database | PostgreSQL + SQLAlchemy ORM |
+| LLM | Groq LLaMA 3.3-70b |
+| RAG | LangChain + ChromaDB |
+| AI Agent | LangGraph ReAct |
+| Embeddings | HuggingFace all-MiniLM-L6-v2 |
+| Containerization | Docker + docker-compose |
+| Language | Python 3.11 |
+
+---
+
+## Design Patterns
+
+| Pattern | Where used |
+|---------|-----------|
+| Factory | VehicleFactory creates right vehicle object |
+| Singleton | One shared database connection across all services |
+| Observer | Automatic SMS + Email notifications on booking |
+| Strategy | Swappable payment method implementations |
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | / | Welcome message |
+| GET | /status | API health + total booking count |
+| GET | /vehicles | List all available vehicles |
+| GET | /vehicles/count | Total vehicle count |
+| GET | /vehicles/{type} | Specific vehicle info |
+| POST | /book | Manual vehicle booking |
+| GET | /bookings | All bookings |
+| GET | /bookings/{user} | Bookings for specific user |
+| POST | /cancel | Cancel a booking |
+| POST | /recommend | AI vehicle recommendation |
+| POST | /ask | RAG natural language Q&A |
+| POST | /agent | Autonomous AI booking agent |
+
+---
+
+## Authentication
+
+All endpoints except `/`, `/status`, and `/docs` require an API key in the request header:
+
+```
+X-API-Key: your-api-key
+```
+
+---
+
+## Run Locally
+
+### With Docker (recommended)
+
+```bash
+git clone https://github.com/AnshumPal/vehicle_Rental_App.git
+cd vehicle_Rental_App/FASTApi
+docker-compose up --build
+```
+
+### Without Docker
+
+```bash
+# install dependencies
+pip install -r requirements.txt
+
+# set environment variables
+cp .env.example .env
+# edit .env with your values
+
+# run server
+uvicorn notebook1:app --reload
+```
+
+Server runs at: `http://127.0.0.1:8000`
+API docs at: `http://127.0.0.1:8000/docs`
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the FASTApi folder:
+
+```
+DATABASE_URL=postgresql://user:password@host:5432/rental_db
+API_KEY=your-api-key-here
+GROQ_API_KEY=your-groq-api-key-here
+```
+
+---
+
+## Example API Calls
+
+**Book a vehicle manually:**
+```bash
+curl -X POST http://localhost:8000/book \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"user": "Anshum", "vehicle_type": "car"}'
+```
+
+**Get AI recommendation:**
+```bash
+curl -X POST http://localhost:8000/recommend \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"requirement": "I need to move furniture this weekend"}'
+```
+
+**Ask a question via RAG:**
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Which vehicle is cheapest?"}'
+```
+
+**Autonomous AI agent booking:**
+```bash
+curl -X POST http://localhost:8000/agent \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Book the cheapest vehicle for Anshum for 3 days"}'
+```
+
+---
+
+## Project Structure
+
+```
+FASTApi/
+├── notebook1.py        → main FastAPI application
+├── database.py         → PostgreSQL connection setup
+├── models.py           → SQLAlchemy table definitions
+├── rag.py              → RAG pipeline (ChromaDB + LangChain)
+├── agent.py            → LangGraph autonomous booking agent
+├── Dockerfile          → multistage Docker build
+├── docker-compose.yml  → full stack deployment
+├── requirements.txt    → Python dependencies
+├── .env.example        → environment variable template
+└── README.md           → this file
+```
+
+---
+
+## How the AI Agent works
+
+```
+User: "Book cheapest vehicle for Anshum for 3 days"
+         ↓
+Agent checks available vehicles using get_available_vehicles tool
+         ↓
+Agent identifies scooter as cheapest at Rs 200/day
+         ↓
+Agent calls book_vehicle_multiple_days tool
+         ↓
+Agent confirms: "Booked scooter for 3 days. Total: Rs 600"
+```
+
+---
+
+## How the RAG Pipeline works
+
+```
+Vehicle knowledge base
+         ↓
+Text chunking (CharacterTextSplitter)
+         ↓
+Embedding generation (HuggingFace all-MiniLM-L6-v2)
+         ↓
+Vector storage (ChromaDB)
+         ↓
+Semantic retrieval (k=5 nearest chunks)
+         ↓
+LLM answer synthesis (Groq LLaMA 3.3)
+         ↓
+Accurate answer based on YOUR data
+```
+
+---
+
+## Author
+
+**Anshum Pal** — AI Backend Engineer in progress
+
+- GitHub: [github.com/AnshumPal](https://github.com/AnshumPal)
+- LinkedIn: [linkedin.com/in/your-profile](https://linkedin.com/in/your-profile)
+
+---
+
+*Built layer by layer — one concept at a time.*
